@@ -1,0 +1,32 @@
+# You can also use the fallback image from docker hub: thorgate/django-template-ci:latest
+image: registry.gitlab.com/thorgate-public/django-project-template/ci:latest
+
+services:
+  - docker:dind
+
+variables:
+  POSTGRES_USER: "marketplace"
+  POSTGRES_PASSWORD: "marketplace"
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "1"
+  COMPOSE_DOCKER_CLI_BUILD: "1"
+
+before_script:
+  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+
+stages:
+  - test
+
+test:
+  stage: test
+  coverage: '/^TOTAL.*\s+(\d+\%)$/'
+  except:
+    - template # Don't run CI on template branch, should not be required
+  variables:
+    EDIT_SETTINGS: "no"
+  script:
+    - make settings
+    - docker-compose build
+    - make node-install
+    - make quality
+    - make coverage

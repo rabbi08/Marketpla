@@ -1,0 +1,48 @@
+# Docker-compose configuration for production
+
+version: '2.1'
+
+services:
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile-django.production
+    container_name: marketplace_django
+    restart: unless-stopped
+    volumes:
+      - "/var/lib/docker-nginx/files/marketplace/assets:/files/assets"
+      - "/var/log/marketplace:/var/log/marketplace"
+    # For some reason the command also has to be specified here, otherwise the entrypoint+command combination won't
+    #  work.
+    entrypoint: /usr/bin/wait-for-it.sh postgres:5432 -t 60 --
+    command: gunicorn marketplace.wsgi:application --workers 2 --bind :80
+    networks:
+      - default
+      - marketplace_nginx
+      - marketplace_postgres
+    depends_on:
+      - redis
+    external_links:
+      - postgres-12:postgres
+
+  redis:
+    image: redis:4.0.10-alpine
+    restart: unless-stopped
+    sysctls:
+      # To allow maintaining TCP backlog setting that defaults to 511
+      net.core.somaxconn: 512
+    volumes:
+      - "/var/lib/docker-marketplace/redis:/data"
+    networks:
+      - default
+
+# NB: These networks must be created by ansible and contain the global nginx/postgres containers.
+# Keep it in sync with ansible/roles/deploy/tasks/main.yml!
+networks:
+  default:
+    external:
+      name: marketplace_default
+  marketplace_nginx:
+    external: true
+  marketplace_postgres:
+    external: true
